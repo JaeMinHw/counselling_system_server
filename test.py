@@ -51,9 +51,10 @@ def generate_data(room):
     while running_threads.get(room, False):
         data1 = random.uniform(0, 100)
         data2 = random.uniform(0, 100)
+        data3 = random.uniform(0, 100)
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         print(f"Sending data to room {room}")
-        socketio.emit('data_update', {'data1': data1, 'data2': data2, 'time': current_time}, room=room)
+        socketio.emit('data_update', {'data1': data1, 'data2': data2, 'data3' : data3, 'time': current_time}, room=room)
         time.sleep(0.1)
     print(f"Data transmission stopped for room {room}")
 
