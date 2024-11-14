@@ -3,79 +3,60 @@ import asyncio
 import json
 import io
 from websockets import serve
-from google.cloud import speech_v1p1beta1 as speech
 from pydub import AudioSegment
+import speech_recognition as sr
+import joblib
+import numpy as np
+import librosa
 
-# Google Cloud Speech-to-Text 설정
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "c:/Users/User/stone-climate-441309-e7-69ab160b40d4.json"  # 서비스 계정 키 파일 경로 설정
+# 학습된 화자 구분 모델 로드
+model = joblib.load("voice_recognition_model_binary.pkl")
+
+# 음성 특징 추출 함수
+def extract_features(audio_file_path):
+    y, sr = librosa.load(audio_file_path, sr=None)
+    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, n_fft=512)
+    spectral_contrast = librosa.feature.spectral_contrast(y=y, sr=sr, n_fft=512)
+    chroma = librosa.feature.chroma_stft(y=y, sr=sr, n_fft=512)
+    tonnetz = librosa.feature.tonnetz(y=librosa.effects.harmonic(y), sr=sr)
+
+    features = np.hstack([
+        np.mean(mfccs, axis=1),
+        np.mean(spectral_contrast, axis=1),
+        np.mean(chroma, axis=1),
+        np.mean(tonnetz, axis=1)
+    ])
+    return features
+
+# 텍스트 추출 및 화자 구분 함수
+def identify_speaker_and_transcribe(audio_file_path):
+    recognizer = sr.Recognizer()
+    with sr.AudioFile(audio_file_path) as source:
+        audio = recognizer.record(source)
+        try:
+            text = recognizer.recognize_google(audio, language="ko-KR")
+        except sr.UnknownValueError:
+            text = ""
+    
+    # 화자 구분
+    features = extract_features(audio_file_path).reshape(1, -1)
+    speaker_label = model.predict(features)[0]
+    speaker = "me" if speaker_label == 1 else "another"
+    return {"speaker": speaker, "text": text}
 
 # WebSocket 연결 처리 함수
 async def handle_connection(websocket, path):
-    client = speech.SpeechClient()
-
     async for audio_data in websocket:
         try:
             print(f"Received audio data of length: {len(audio_data)}")
 
-            # 오디오 데이터를 메모리 내에서 변환
+            # 오디오 데이터를 메모리 내에서 변환 및 WAV 저장
             audio = AudioSegment.from_file(io.BytesIO(audio_data), format="webm")
             audio = audio.set_frame_rate(16000).set_channels(1)
+            audio.export("temp_audio.wav", format="wav")
 
-            # 16-bit PCM 형식으로 메모리 내 오디오 파일 저장
-            audio_bytes = io.BytesIO()
-            audio.export(audio_bytes, format="wav", parameters=["-acodec", "pcm_s16le"])  # Ensure 16-bit PCM
-            audio_bytes.seek(0)
-
-            # Google Cloud Speech-to-Text 요청 생성
-            audio_content = audio_bytes.read()
-            audio = speech.RecognitionAudio(content=audio_content)
-            diarization_config = speech.SpeakerDiarizationConfig(
-                enable_speaker_diarization=True,
-                min_speaker_count=1,
-                max_speaker_count=2
-            )
-            config = speech.RecognitionConfig(
-                encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-                sample_rate_hertz=16000,
-                language_code="ko-KR",
-                diarization_config=diarization_config
-            )
-
-            response = client.recognize(config=config, audio=audio)
-
-            # 인식된 결과 처리
-            result = []
-            if response.results:
-                words_info = response.results[-1].alternatives[0].words
-                current_speaker = None
-                current_text = ""
-                start_time = None
-
-                for word_info in words_info:
-                    # 화자 태그가 바뀌면 현재 문장 저장
-                    if word_info.speaker_tag != current_speaker:
-                        if current_speaker is not None and current_text:
-                            result.append({
-                                "start": start_time,
-                                "end": word_info.start_time.total_seconds(),
-                                "speaker": f"SPEAKER_{current_speaker}",
-                                "text": current_text.strip()
-                            })
-                        # 새 화자 시작
-                        current_speaker = word_info.speaker_tag
-                        current_text = word_info.word
-                        start_time = word_info.start_time.total_seconds()
-                    else:
-                        current_text += f" {word_info.word}"
-
-                # 마지막 화자에 대한 정보 추가
-                if current_text:
-                    result.append({
-                        "start": start_time,
-                        "end": words_info[-1].end_time.total_seconds(),
-                        "speaker": f"SPEAKER_{current_speaker}",
-                        "text": current_text.strip()
-                    })
+            # 화자 구분 및 텍스트 추출
+            result = identify_speaker_and_transcribe("temp_audio.wav")
 
             # 결과 전송
             await websocket.send(json.dumps(result))
