@@ -1,3 +1,5 @@
+# flutter과 파이썬과의 통신을 통해 오디오 저장하는 코드
+
 import asyncio
 import websockets
 import io

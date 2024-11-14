@@ -1,3 +1,5 @@
+# 모델 학습하는 코드
+
 import tensorflow as tf
 import numpy as np
 import librosa
