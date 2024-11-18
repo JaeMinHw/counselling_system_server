@@ -64,7 +64,7 @@ X_train = load_and_process_data(user_files_path)
 # 데이터 스케일링 (표준화)
 scaler = StandardScaler()
 X_train = scaler.fit_transform(X_train)
-joblib.dump(scaler, "scaler_me.pkl")  # 스케일러 저장
+joblib.dump(scaler, "scaler_me2.pkl")  # 스케일러 저장
 print("스케일러가 저장되었습니다.")
 
 # CNN-LSTM Autoencoder 모델 정의
@@ -82,7 +82,7 @@ model = tf.keras.models.Sequential([
 model.compile(optimizer='adam', loss='mse')
 print("모델 학습을 시작합니다...")
 model.fit(X_train, X_train, epochs=50, batch_size=16, validation_split=0.2)
-model.save("cnn_lstm_autoencoder_me.h5")
+model.save("cnn_lstm_autoencoder_me2.h5")
 print("모델이 성공적으로 저장되었습니다.")
 
 

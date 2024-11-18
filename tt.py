@@ -2,13 +2,13 @@ import tensorflow as tf
 import numpy as np
 import librosa
 import joblib
+import os
 
 # 모델 및 스케일러 로드
-model = tf.keras.models.load_model("cnn_lstm_autoencoder_me.h5")
-scaler = joblib.load("scaler_me.pkl")
+model = tf.keras.models.load_model("cnn_lstm_autoencoder_me2.h5")
+scaler = joblib.load("scaler_me2.pkl")
 
-
-threshold=0.2
+threshold = 0.13
 
 # 음성 특징 추출 함수 (MFCC)
 def extract_mfcc(audio_file_path):
@@ -37,7 +37,41 @@ def test_model(audio_file_path):
     label = "me" if mse < threshold else "another"
     return label, mse
 
+# 폴더 내 모든 파일 테스트 함수
+def test_folder(folder_path, true_label):
+    total_files = 0
+    correct_predictions = 0
+    results = []
+
+    for file_name in os.listdir(folder_path):
+        if file_name.endswith(".wav"):  # WAV 파일만 처리
+            file_path = os.path.join(folder_path, file_name)
+            predicted_label, mse = test_model(file_path)
+            total_files += 1
+
+            # 정확도 검사
+            is_correct = (predicted_label == true_label)
+            correct_predictions += int(is_correct)
+
+            # 결과 저장
+            results.append({
+                "file": file_name,
+                "predicted_label": predicted_label,
+                "true_label": true_label,
+                "mse": mse,
+                "correct": is_correct
+            })
+
+    # 정확도 계산
+    accuracy = correct_predictions / total_files if total_files > 0 else 0
+    return results, accuracy
+
 # 테스트 실행
-test_audio_path = "C:/Users/User/Desktop/server/test/known1/jm (2).wav"  # 테스트할 오디오 파일 경로
-label, mse = test_model(test_audio_path)
-print(f"Predicted Label: {label}, MSE: {mse}")
+test_folder_path = "C:/Users/User/Desktop/server/test/unknown"  # 테스트할 폴더 경로
+true_label = "another"  # 폴더의 실제 레이블
+results, accuracy = test_folder(test_folder_path, true_label)
+
+# 결과 출력
+print(f"Accuracy: {accuracy * 100:.2f}%")
+for result in results:
+    print(f"File: {result['file']}, Predicted: {result['predicted_label']}, True: {result['true_label']}, MSE: {result['mse']:.5f}, Correct: {result['correct']}")
