@@ -128,6 +128,7 @@ def process_audio(audio_data):
     return results
 
 # WebSocket 처리 함수
+# WebSocket 처리 함수
 async def handle_connection(websocket, path):
     async for message in websocket:
         try:
@@ -140,8 +141,11 @@ async def handle_connection(websocket, path):
                 if isinstance(encoded_audio, list):
                     audio_data = bytes(encoded_audio)
                 else:
-                    # Base64 인코딩된 경우
-                    audio_data = base64.b64decode(encoded_audio)
+                    # Base64 인코딩된 경우, Base64 디코딩
+                    try:
+                        audio_data = base64.b64decode(encoded_audio)
+                    except Exception as e:
+                        raise ValueError("Base64 decoding failed: " + str(e))
 
                 # 동적 구간 생성 및 처리
                 results = process_audio(audio_data)
@@ -155,6 +159,7 @@ async def handle_connection(websocket, path):
         except Exception as e:
             print(f"Error processing audio data: {e}")
             await websocket.send(json.dumps({"error": str(e)}))
+
 
 
 # WebSocket 서버 시작

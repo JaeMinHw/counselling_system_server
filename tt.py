@@ -5,15 +5,15 @@ import joblib
 import os
 
 # 모델 및 스케일러 로드
-model = tf.keras.models.load_model("cnn_lstm_autoencoder_me2.h5")
-scaler = joblib.load("scaler_me2.pkl")
+model = tf.keras.models.load_model("cnn_lstm_autoencoder_me3.h5")
+scaler = joblib.load("scaler_me3.pkl")
 
 threshold = 0.13
 
 # 음성 특징 추출 함수 (MFCC)
 def extract_mfcc(audio_file_path):
     y, sr = librosa.load(audio_file_path, sr=16000)
-    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=40)
+    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=40, n_fft=1024)
     return np.mean(mfccs.T, axis=0)
 
 # 입력 데이터를 준비하는 함수
@@ -67,8 +67,8 @@ def test_folder(folder_path, true_label):
     return results, accuracy
 
 # 테스트 실행
-test_folder_path = "C:/Users/User/Desktop/server/test/unknown"  # 테스트할 폴더 경로
-true_label = "another"  # 폴더의 실제 레이블
+test_folder_path = "C:/Users/User/Desktop/server/test"  # 테스트할 폴더 경로
+true_label = "me"  # 폴더의 실제 레이블
 results, accuracy = test_folder(test_folder_path, true_label)
 
 # 결과 출력

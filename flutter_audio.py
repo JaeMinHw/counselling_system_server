@@ -15,6 +15,7 @@ os.makedirs(output_folder, exist_ok=True)
 async def handle_connection(websocket, path):
     async for audio_data in websocket:
         try:
+            
             # 현재 시간 기준으로 고유한 파일명 생성
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = os.path.join(output_folder, f"audio_{timestamp}.wav")

@@ -35,12 +35,12 @@ def extract_mfcc_segments(audio_file_path, segment_duration=1.0):
     features = []
     for seg in segments:
         if len(seg) == segment_length:
-            mfcc = librosa.feature.mfcc(y=seg, sr=sr, n_mfcc=40)
+            mfcc = librosa.feature.mfcc(y=seg, sr=sr, n_mfcc=40, n_fft = 1024)
             features.append(np.mean(mfcc.T, axis=0))
             # 증강 데이터를 추가
             for aug in augment_audio(seg, sr):
                 if len(aug) >= segment_length:  # 길이 확인
-                    aug_mfcc = librosa.feature.mfcc(y=aug[:segment_length], sr=sr, n_mfcc=40)
+                    aug_mfcc = librosa.feature.mfcc(y=aug[:segment_length], sr=sr, n_mfcc=40, n_fft = 1024)
                     features.append(np.mean(aug_mfcc.T, axis=0))
 
     return features
@@ -64,7 +64,7 @@ X_train = load_and_process_data(user_files_path)
 # 데이터 스케일링 (표준화)
 scaler = StandardScaler()
 X_train = scaler.fit_transform(X_train)
-joblib.dump(scaler, "scaler_me2.pkl")  # 스케일러 저장
+joblib.dump(scaler, "scaler_me3.pkl")  # 스케일러 저장
 print("스케일러가 저장되었습니다.")
 
 # CNN-LSTM Autoencoder 모델 정의
@@ -81,8 +81,8 @@ model = tf.keras.models.Sequential([
 # 모델 컴파일 및 학습
 model.compile(optimizer='adam', loss='mse')
 print("모델 학습을 시작합니다...")
-model.fit(X_train, X_train, epochs=50, batch_size=16, validation_split=0.2)
-model.save("cnn_lstm_autoencoder_me2.h5")
+model.fit(X_train, X_train, epochs=50, batch_size=8, validation_split=0.2)
+model.save("cnn_lstm_autoencoder_me3.h5")
 print("모델이 성공적으로 저장되었습니다.")
 
 
