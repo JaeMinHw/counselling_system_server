@@ -10,7 +10,7 @@ from pydub import AudioSegment
 import webrtcvad
 import base64
 import os
-
+from datetime import datetime
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "c:/Users/User/stone-climate-441309-e7-69ab160b40d4.json"
 
 # Google Speech-to-Text 클라이언트 설정
@@ -51,10 +51,13 @@ def transcribe_audio(audio_wav):
 
     audio = speech.RecognitionAudio(content=audio_content)
     config = speech.RecognitionConfig(
-        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-        sample_rate_hertz=16000,
-        language_code="ko-KR"
-    )
+    encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+    sample_rate_hertz=16000,
+    language_code="ko-KR",
+    enable_word_time_offsets=True,  # 단어 시간 오프셋 활성화
+    use_enhanced=True,              # 고급 인식 모델 사용
+
+)
 
     response = speech_client.recognize(config=config, audio=audio)
     if response.results:
@@ -162,10 +165,52 @@ async def handle_connection(websocket, path):
 
 
 
+# WebSocket 처리 함수
+async def full_handle(websocket, path):
+    try:
+        async for message in websocket:
+            # JSON 데이터 수신
+            data = json.loads(message)
+            
+            # 오디오 데이터와 전송 시간 추출
+            audio_data = data.get("audio")  # 리스트 형태로 수신됨
+            sent_time = data.get("sentTime")
+            
+            if not audio_data:
+                await websocket.send(json.dumps({"status": "error", "message": "No audio data received"}))
+                continue
+            
+            # 리스트를 bytes로 변환
+            audio_bytes = bytes(audio_data)
+
+            # 오디오 데이터 저장
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            filename = f"full_audio_{timestamp}.wav"
+            os.makedirs("received_full_audio", exist_ok=True)
+            filepath = os.path.join("received_full_audio", filename)
+            
+            # 바이너리 데이터로 저장
+            with open(filepath, "wb") as audio_file:
+                audio_file.write(audio_bytes)
+            
+            print(f"Full audio data received and saved to {filepath} at {sent_time}")
+            
+            # 성공 메시지 전송
+            await websocket.send(json.dumps({"status": "success", "message": "Audio data saved successfully"}))
+    except Exception as e:
+        print(f"Error in full_handle: {e}")
+        await websocket.send(json.dumps({"status": "error", "message": str(e)}))
+
+
 # WebSocket 서버 시작
 async def main():
-    async with websockets.serve(handle_connection, "localhost", 8765):
-        print("WebSocket server started...")
-        await asyncio.Future()
+    # 두 WebSocket 서버를 설정하고 실행
+    server1 = await websockets.serve(handle_connection, "localhost", 8765)
+    server2 = await websockets.serve(full_handle, "localhost", 8766)
 
-asyncio.run(main())
+    print("Starting both WebSocket servers...")
+    # 서버가 계속 실행되도록 대기
+    await asyncio.Future()  # 무한 대기를 통해 서버 유지
+
+if __name__ == "__main__":
+    asyncio.run(main())
