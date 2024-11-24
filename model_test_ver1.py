@@ -10,22 +10,24 @@ from pydub import AudioSegment
 import webrtcvad
 import base64
 import os
+import time
 from datetime import datetime
+from google.cloud import speech
+
+
+
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "c:/Users/User/stone-climate-441309-e7-69ab160b40d4.json"
 
 # Google Speech-to-Text 클라이언트 설정
-from google.cloud import speech
 speech_client = speech.SpeechClient()
 
 # 모델 및 스케일러 로드
 model = tf.keras.models.load_model("cnn_lstm_autoencoder_me2.h5")
 scaler = joblib.load("scaler_me2.pkl")
 
-
-threshold=0.2
-
-output_folder = "received_full_audio"
-os.makedirs(output_folder, exist_ok=True)
+threshold = 0.2
+output_folder = "jm"
+os.makedirs(output_folder, exist_ok=True)  # 오디오 파일을 저장할 폴더
 
 # 음성 특징 추출 함수
 def extract_mfcc(audio_data):
@@ -53,11 +55,9 @@ def transcribe_audio(audio_wav):
 
     audio = speech.RecognitionAudio(content=audio_content)
     config = speech.RecognitionConfig(
-    encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-    sample_rate_hertz=16000,
-    language_code="ko-KR",
-    enable_word_time_offsets=True,  # 단어 시간 오프셋 활성화
-    use_enhanced=True,              # 고급 인식 모델 사용
+        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+        sample_rate_hertz=16000,
+        language_code="ko-KR"
     )
 
     response = speech_client.recognize(config=config, audio=audio)
@@ -69,7 +69,7 @@ def transcribe_audio(audio_wav):
 # VAD로 음성 구간 탐지
 def detect_voice_segments(audio_data):
     vad = webrtcvad.Vad()
-    vad.set_mode(3)  # 가장 민감한 모드
+    vad.set_mode(1)  # 가장 민감한 모드 =3 
 
     audio = AudioSegment.from_file(io.BytesIO(audio_data), format="webm")
     audio = audio.set_frame_rate(16000).set_sample_width(2).set_channels(1)
@@ -119,19 +119,33 @@ def process_audio(audio_data):
                 audio_wav.seek(0)  # 재설정
                 text = transcribe_audio(audio_wav)
 
-                results.append({
-                    "label": label,
-                     "mse": mse,  # MSE 추가
-                    "text": text,
-                    "start": segment_start,
-                    "end": segment_end,
-                })
+                if text:  # 텍스트가 감지된 경우에만 저장
+                    results.append({
+                        "label": label,
+                        "mse": mse,  # MSE 추가
+                        "text": text,
+                        "start": segment_start,
+                        "end": segment_end,
+                    })
 
                 current_segment = []
 
     return results
 
-# WebSocket 처리 함수
+# 오디오 파일 저장 함수
+def save_audio_file(audio_data):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # 고유한 파일명 생성
+    filename = os.path.join(output_folder, f"audio_{timestamp}.wav")
+    
+    # WebSocket으로 받은 데이터가 WebM 형식이라면 변환
+    audio = AudioSegment.from_file(io.BytesIO(audio_data), format="webm")
+    audio = audio.set_frame_rate(16000).set_sample_width(2).set_channels(1)  # 16kHz, 16-bit, 모노 설정
+    
+    # 파일을 WAV 형식으로 저장
+    audio.export(filename, format="wav")
+    print(f"Audio file saved as {filename}")
+    return filename
+
 # WebSocket 처리 함수
 async def handle_connection(websocket, path):
     async for message in websocket:
@@ -145,18 +159,22 @@ async def handle_connection(websocket, path):
                 if isinstance(encoded_audio, list):
                     audio_data = bytes(encoded_audio)
                 else:
-                    # Base64 인코딩된 경우, Base64 디코딩
-                    try:
-                        audio_data = base64.b64decode(encoded_audio)
-                    except Exception as e:
-                        raise ValueError("Base64 decoding failed: " + str(e))
+                    # Base64 인코딩된 경우
+                    audio_data = base64.b64decode(encoded_audio)
 
                 # 동적 구간 생성 및 처리
                 results = process_audio(audio_data)
 
-                # 결과 전송
-                await websocket.send(json.dumps(results))
-                print(f"Sent results: {results}")
+                if results:  # 텍스트가 감지된 결과만 저장
+                    # 오디오 파일 저장
+                    save_audio_file(audio_data)
+
+                    # 결과 전송
+                    await websocket.send(json.dumps(results))
+                    print(f"Sent results: {results}")
+                else:
+                    print("No text detected in the audio.")
+
             else:
                 print("No audio data received.")
 
@@ -165,57 +183,11 @@ async def handle_connection(websocket, path):
             await websocket.send(json.dumps({"error": str(e)}))
 
 
-
-# WebSocket 처리 함수
-async def full_handle(websocket, path):
-    try:
-        async for message in websocket:
-            # JSON 데이터 수신
-            data = json.loads(message)
-            
-            # 오디오 데이터와 전송 시간 추출
-            audio_data = data.get("audio")  # 리스트 형태로 수신됨
-            sent_time = data.get("sentTime")
-            
-            if not audio_data:
-                await websocket.send(json.dumps({"status": "error", "message": "No audio data received"}))
-                continue
-
-            
-            # 리스트 내부 데이터를 바이트로 병합
-            try:
-                audio_bytes = b"".join(bytes(chunk) for chunk in audio_data)
-                print(f"Converted audio_bytes length: {len(audio_bytes)}")
-            except Exception as e:
-                raise ValueError(f"Error converting audio_data to bytes: {e}")
-
-            # 오디오 데이터 저장
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            filename = f"full_audio_{timestamp}.wav"
-
-            filepath = os.path.join(output_folder, filename)
-            audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format="webm")
-            audio = audio.set_frame_rate(16000).set_sample_width(2).set_channels(1)  # 16kHz, 16-bit, 모노 설정
-            # 바이너리 데이터로 저장
-            audio.export(filepath, format="wav")
-            print(f"Full audio data received and saved to {filepath} at {sent_time}")
-            
-            # 성공 메시지 전송
-            await websocket.send(json.dumps({"status": "success", "message": "Audio data saved successfully"}))
-    except Exception as e:
-        print(f"Error in full_handle: {e}")
-        await websocket.send(json.dumps({"status": "error", "message": str(e)}))
-
-
 # WebSocket 서버 시작
 async def main():
-    # 두 WebSocket 서버를 설정하고 실행
-    server1 = await websockets.serve(handle_connection, "localhost", 8765)
-    server2 = await websockets.serve(full_handle, "localhost", 8766)
+    async with websockets.serve(handle_connection, "localhost", 8765, max_size= 2**25):
+        print("WebSocket server started...")
+        await asyncio.Future()  # 서버 계속 실행
 
-    print("Starting both WebSocket servers...")
-    # 서버가 계속 실행되도록 대기
-    await asyncio.Future()  # 무한 대기를 통해 서버 유지
-
-if __name__ == "__main__":
-    asyncio.run(main())
+# 서버 실행
+asyncio.run(main())

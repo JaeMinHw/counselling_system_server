@@ -67,7 +67,7 @@ def test_folder(folder_path, true_label):
     return results, accuracy
 
 # 테스트 실행
-test_folder_path = "C:/Users/User/Desktop/server/test"  # 테스트할 폴더 경로
+test_folder_path = "C:/Users/User/Desktop/server/jm"  # 테스트할 폴더 경로
 true_label = "me"  # 폴더의 실제 레이블
 results, accuracy = test_folder(test_folder_path, true_label)
 
