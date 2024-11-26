@@ -18,11 +18,11 @@ from google.cloud import speech
 speech_client = speech.SpeechClient()
 
 # 모델 및 스케일러 로드
-model = tf.keras.models.load_model("cnn_lstm_autoencoder_me2.h5")
-scaler = joblib.load("scaler_me2.pkl")
+model = tf.keras.models.load_model("cnn_lstm_autoencoder_me3.h5")
+scaler = joblib.load("scaler_me3.pkl")
 
 
-threshold=0.2
+threshold=0.083
 
 output_folder = "received_full_audio"
 os.makedirs(output_folder, exist_ok=True)

@@ -4,8 +4,8 @@ import tensorflow as tf
 import joblib
 
 # 학습한 모델과 스케일러 로드
-model = tf.keras.models.load_model("cnn_lstm_autoencoder_me.h5")
-scaler = joblib.load("scaler_me.pkl")
+model = tf.keras.models.load_model("cnn_lstm_autoencoder_me3.h5")
+scaler = joblib.load("scaler_me3.pkl")
 
 # 음성 특징 추출 함수 (MFCC만 사용)
 def extract_mfcc(audio_file_path):

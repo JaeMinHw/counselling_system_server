@@ -8,7 +8,7 @@ import os
 model = tf.keras.models.load_model("cnn_lstm_autoencoder_me3.h5")
 scaler = joblib.load("scaler_me3.pkl")
 
-threshold = 0.13
+threshold = 0.083
 
 # 음성 특징 추출 함수 (MFCC)
 def extract_mfcc(audio_file_path):
@@ -67,7 +67,7 @@ def test_folder(folder_path, true_label):
     return results, accuracy
 
 # 테스트 실행
-test_folder_path = "C:/Users/User/Desktop/server/jm"  # 테스트할 폴더 경로
+test_folder_path = "C:/Users/User/Desktop/server/test/known"  # 테스트할 폴더 경로
 true_label = "me"  # 폴더의 실제 레이블
 results, accuracy = test_folder(test_folder_path, true_label)
 
