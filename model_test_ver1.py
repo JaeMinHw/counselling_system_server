@@ -22,10 +22,15 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "c:/Users/User/stone-climate-4413
 speech_client = speech.SpeechClient()
 
 # 모델 및 스케일러 로드
-model = tf.keras.models.load_model("cnn_lstm_autoencoder_me2.h5")
-scaler = joblib.load("scaler_me2.pkl")
+# model = tf.keras.models.load_model("cnn_lstm_autoencoder_me2.h5")
+# scaler = joblib.load("scaler_me2.pkl")
+# threshold = 0.13
 
-threshold = 0.2
+model = tf.keras.models.load_model("cnn_lstm_autoencoder_me3.h5")
+scaler = joblib.load("scaler_me3.pkl")
+threshold=0.083
+
+
 output_folder = "jm"
 os.makedirs(output_folder, exist_ok=True)  # 오디오 파일을 저장할 폴더
 
