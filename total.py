@@ -333,11 +333,27 @@ def handle_accept_connection():
     socketio.emit('connection_accepted', {'message': 'Connection accepted'}, room=room)
     print(f"Started data transmission for room {room}")
 
+
+# 임의의 데이터 생성 및 전송
 @socketio.on('start')
 def handle_start():
+
+
     counsel_id = clients[request.sid]['counselor_id']
     room = counsel_id
     print(f"Start data transmission for room {room}")
+
+    socketio.emit('sensor_start', room)
+
+    
+    # client_server에 전송
+
+    
+
+
+
+    # 이 코드는 임의의 데이터를 생성 후 바로 flutter에 전송
+    
     
     if room in threads and not running_threads[room]:
         start_background_thread(room)
