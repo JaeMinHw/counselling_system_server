@@ -343,11 +343,11 @@ def handle_start():
     room = counsel_id
     print(f"Start data transmission for room {room}")
 
-    socketio.emit('sensor_start', room)
+    
 
     
     # client_server에 전송
-
+    socketio.emit('sensor_start', room)
     
 
 
@@ -355,18 +355,32 @@ def handle_start():
     # 이 코드는 임의의 데이터를 생성 후 바로 flutter에 전송
     
     
-    if room in threads and not running_threads[room]:
-        start_background_thread(room)
-    elif room not in threads:
-        start_background_thread(room)
-    else:
-        print(f"Data transmission already running for room {room}")
+    # if room in threads and not running_threads[room]:
+    #     start_background_thread(room)
+    # elif room not in threads:
+    #     start_background_thread(room)
+    # else:
+    #     print(f"Data transmission already running for room {room}")
+
+
+# 
+@socketio.on('sensor_data')
+def sensor_data(data) :
+    room = data['room']
+    data1 = data['data1']
+    data2 = data['data2']
+    data3 = data['data3']
+    current_time = data['time']
+    socketio.emit('data_update', {'data1': data1, 'data2': data2, 'data3' : data3, 'time': current_time}, room=room)
+        
+
 
 @socketio.on('stop')
 def handle_stop():
+    
     counsel_id = clients[request.sid]['counselor_id']
     room = counsel_id
-    
+    socketio.emit('stop',room)
     print(f"Stop data transmission for room {room}")
     if room in threads:
         running_threads[room] = False
