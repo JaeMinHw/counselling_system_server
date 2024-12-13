@@ -364,49 +364,15 @@ def handle_start():
 
 
 # 
-@socketio.on('sensor_data_batch')
-def sensor_data_batch(data):
-    """
-    배치 전송된 data1 처리
-    """
-    room = data['room']
-    data1_batch = data['data1_batch']
-    current_time = data['time']
-
-    # 배치 데이터를 처리하거나 그대로 전송
-    socketio.emit('data_update_batch', {
-        'data1_batch': data1_batch,
-        'time': current_time
-    }, room=room)
-    print(f"Received batch data1 for room {room}: {data1_batch}")
-
-
 @socketio.on('sensor_data')
-def sensor_data(data):
-    """
-    즉시 전송된 data2, data3 처리
-    """
+def sensor_data(data) :
     room = data['room']
-    sensor = data['sensor']
-    value = data['value']
+    data1 = data['data1']
+    data2 = data['data2']
+    data3 = data['data3']
     current_time = data['time']
-
-    # 센서 종류에 따라 다르게 처리
-    if sensor == 'data2':
-        socketio.emit('data_update', {
-            'sensor': 'data2',
-            'value': value,
-            'time': current_time
-        }, room=room)
-        # print(f"Received data2 for room {room}: {value}")
-
-    elif sensor == 'data3':
-        socketio.emit('data_update', {
-            'sensor': 'data3',
-            'value': value,
-            'time': current_time
-        }, room=room)
-        # print(f"Received data3 for room {room}: {value}")
+    socketio.emit('data_update', {'data1': data1, 'data2': data2, 'data3' : data3, 'time': current_time}, room=room)
+        
 
 
 @socketio.on('stop')
