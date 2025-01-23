@@ -17,7 +17,7 @@ import threading
 import random
 import time
 import pymysql
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 app = Flask(__name__)
@@ -107,10 +107,13 @@ def detect_voice_segments(audio_data):
     return segments
 
 # 구간 기반 화자 판별 및 텍스트 변환
-def process_audio(audio_data,sent_time):
-    voice_segments = detect_voice_segments(audio_data)
+def process_audio(audio_data, sent_time):
+    voice_segments = detect_voice_segments(audio_data)  # 음성 구간 탐지
     audio = AudioSegment.from_file(io.BytesIO(audio_data), format="webm")
     audio = audio.set_frame_rate(16000).set_sample_width(2).set_channels(1)
+
+    total_duration = len(audio) / 1000  # 전체 오디오 길이 (초 단위)
+    sent_time_dt = datetime.strptime(sent_time, "%H:%M:%S")  # sentTime을 datetime으로 변환
 
     results = []
     current_segment = []
@@ -135,13 +138,20 @@ def process_audio(audio_data,sent_time):
                 audio_wav.seek(0)  # 재설정
                 text = transcribe_audio(audio_wav)
 
+                # 절대 시간 계산
+                segment_start_time = sent_time_dt - timedelta(seconds=total_duration) + timedelta(seconds=segment_start)
+                segment_end_time = segment_start_time + timedelta(seconds=(segment_end - segment_start))
+
+
+                text = "안녕하세요"
+
                 results.append({
-                    "label": label,
+                    "label": label, # 누구인지(me or another)
                     "mse": mse,  # MSE 추가
                     "text": text,
-                    "start": segment_start,
-                    "end": segment_end,
-                    "send_time" : sent_time,
+                    "start": segment_start_time.strftime("%H:%M:%S"),
+                    "send_time" : segment_start_time.strftime("%H:%M:%S"),
+                    "end_time": segment_end_time.strftime("%H:%M:%S"),
                 })
 
                 current_segment = []
@@ -269,10 +279,10 @@ def generate_data(room):
         data2 = random.uniform(0, 100)
         data3 = random.uniform(0, 100)
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        print(f"Sending data to room {room}")
+        # print(f"Sending data to room {room}")
         socketio.emit('data_update', {'data1': data1, 'data2': data2, 'data3' : data3, 'time': current_time}, room=room)
         time.sleep(0.1)
-    print(f"Data transmission stopped for room {room}")
+    # print(f"Data transmission stopped for room {room}")
 
 def start_background_thread(room):
     running_threads[room] = True
@@ -341,7 +351,7 @@ def handle_start():
 
     counsel_id = clients[request.sid]['counselor_id']
     room = counsel_id
-    print(f"Start data transmission for room {room}")
+    # print(f"Start data transmission for room {room}")
 
     
 
@@ -378,7 +388,7 @@ def sensor_data_batch(data):
         'data1_batch': data1_batch,
         'time': current_time
     }, room=room)
-    print(f"Received batch data1 for room {room}: {data1_batch}")
+    # print(f"Received batch data1 for room {room}: {data1_batch}")
 
 
 @socketio.on('sensor_data')
@@ -441,6 +451,32 @@ def handle_disconnect():
                 del threads[room]
                 del running_threads[room]
 
+
+
+
+# 센서 데이터에서 특징이 감지된 경우 실행되어야 할 코드(센서 값의 시간과 감정이나 특징을 추가한 데이터)
+def feture_detect(data):
+    # data에 추가해야할 데이터( 센서 값의 시간, 어떤 감정인지, )
+    socketio.emit('feature_detect',data)
+
+    
+
+
+
+# 감정 분석 후 전송하는 구조 테스트를 위한 함수
+@app.route("/feature")
+def feture_detect_test():
+    now = time
+    data = {
+        'time' : now.strftime('%H:%M:%S'),
+        'feature' : 'angry'
+    }
+
+    feture_detect(data)
+    return data
+
+
+
 @app.route('/')
 def index():
     return "Hello World!"
@@ -458,8 +494,8 @@ def start_flask():
 # WebSocket 서버 시작
 async def main():
     # 두 WebSocket 서버를 설정하고 실행
-    server1 = await websockets.serve(handle_connection, "localhost", 8765)
-    server2 = await websockets.serve(full_handle, "localhost", 8766)
+    server1 = await websockets.serve(handle_connection, "localhost", 8765, max_size=None)
+    server2 = await websockets.serve(full_handle, "localhost", 8766,  max_size=None)
 
     print("Starting both WebSocket servers...")
 
