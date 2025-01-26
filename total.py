@@ -143,7 +143,7 @@ def process_audio(audio_data, sent_time):
                 segment_end_time = segment_start_time + timedelta(seconds=(segment_end - segment_start))
 
 
-                text = "안녕하세요"
+                # text = "안녕하세요안녕하세요안녕하세요안녕하세요안녕하세요안녕하세요"
 
                 results.append({
                     "label": label, # 누구인지(me or another)
@@ -469,7 +469,7 @@ def feture_detect_test():
     now = time
     data = {
         'time' : now.strftime('%H:%M:%S'),
-        'feature' : 'angry'
+        'feature' : 'anxiety'
     }
 
     feture_detect(data)
