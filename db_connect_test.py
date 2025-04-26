@@ -181,21 +181,23 @@ def process_audio(audio_data, sent_time, session_id=None):
                     current_segment = []
                     continue  # counseling_id 없으면 DB insert 하지 않고 건너뜀
 
-                connection = get_db_connection()
 
-                try:
-                    with connection.cursor() as cursor:
-                        sql = "INSERT INTO conversation_data (start, label, mse, text, counseling_id) VALUES (%s, %s, %s, %s, %s)"
-                        cursor.execute(sql, (
-                            segment_start_time.strftime("%H:%M:%S"),
-                            label,
-                            mse,
-                            text,
-                            counseling_id
-                        ))
-                        connection.commit()
-                finally:
-                    connection.close()
+                if len(text) != 0:
+                    connection = get_db_connection()
+
+                    try:
+                        with connection.cursor() as cursor:
+                            sql = "INSERT INTO conversation_data (start, label, mse, text, counseling_id) VALUES (%s, %s, %s, %s, %s)"
+                            cursor.execute(sql, (
+                                segment_start_time.strftime("%H:%M:%S"),
+                                label,
+                                mse,
+                                text,
+                                counseling_id
+                            ))
+                            connection.commit()
+                    finally:
+                        connection.close()
 
                 results.append({
                     "label": label,
@@ -385,32 +387,126 @@ def handle_counselor_login(data):
 @socketio.on('accept_connection')
 def handle_accept_connection(data):
     counselor_id = clients[request.sid]['counselor_id']
-
     room = counselor_id
-    socketio.emit('connection_accepted', {'message': 'Connection accepted'}, room=room)
-    print(f"Started data transmission for room {room}")
 
     connection = get_db_connection()
-
     try:
         with connection.cursor() as cursor:
-            # clients_id (== patient_id) 저장
             sql = "INSERT INTO counseling_data (clients_id) VALUES (%s)"
             cursor.execute(sql, (data,))
             connection.commit()
+            counseling_id = cursor.lastrowid  # ✅ 먼저 가져오고
 
-            # 생성된 counseling_id 가져오기
-            counseling_id = cursor.lastrowid
+            clients[request.sid]['counseling_id'] = counseling_id  # ✅ 세션에 저장
+
+            # ✅ 이제 emit 하자!
+            socketio.emit('connection_accepted', {
+                'message': 'Connection accepted',
+                'counseling_id': counseling_id
+            }, room=room)
+
             print(f"New counseling_id generated: {counseling_id}")
-
-            # 세션에 counseling_id 저장
-            clients[request.sid]['counseling_id'] = counseling_id
 
     finally:
         connection.close()
 
 
 
+@socketio.on('data_history')
+def data_history():
+    # 상담사에 있는 내담자가 쭉 뜨고 
+    # 날짜가 나오게 하고
+    # 클릭하면 시간대가 뜨고 그 시간대의 데이터 불러오기
+    # 만약 시간대가 1개라면 바로 그 해당 시간대로 들어가지게 
+    # 그리고 이전의 기록(시간대)인데 대화가 없으면 해당 시간대 counseling_data 데이터 삭제
+    # 즉 실제 데이터가 존재해야만 디비에 값 저장해놓기
+
+    session_id = request.sid
+    if session_id not in clients or clients[session_id].get('type') != 'counselor':
+        emit('data_history_result', {'status': 'error', 'message': '권한 없음'})
+        print("te")
+        return
+
+    counselor_id = clients[session_id]['counselor_id']
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            # 1. 상담사에게 연결된 모든 내담자 조회
+            sql = "SELECT id, username FROM clients WHERE counsel_id = %s"
+            cursor.execute(sql, (counselor_id,))
+            clients_result = cursor.fetchall()
+            print("counselor_id")
+            print(counselor_id)
+
+            client_histories = []
+
+            for client in clients_result:
+                client_id = client['id']
+                username = client['username']
+
+                # 2. 내담자의 모든 상담 데이터 (counseling_data) 조회
+                sql = "SELECT counseling_id, day FROM counseling_data WHERE clients_id = %s"
+                cursor.execute(sql, (client_id,))
+                counseling_list = cursor.fetchall()
+                print("test") # 여기 실행 안 됨 <------------------------------------------------------------------------------------------------------------------------------------------------------------
+                valid_sessions = []
+                for row in counseling_list:
+                    counseling_id = row['counseling_id']
+                    day = row['day']
+
+                    # 3. 해당 상담 세션에 실제 대화 기록이 있는지 확인
+                    check_sql = "SELECT COUNT(*) as count FROM conversation_data WHERE counseling_id = %s"
+                    cursor.execute(check_sql, (counseling_id,))
+                    result = cursor.fetchone()
+
+                    if result['count'] == 0:
+                        # 4. 대화 기록이 없으면 해당 상담 데이터 삭제
+                        delete_sql = "DELETE FROM counseling_data WHERE counseling_id = %s"
+                        cursor.execute(delete_sql, (counseling_id,))
+                        connection.commit()
+                    else:
+                        # 실제 기록이 존재하는 세션만 저장
+                        valid_sessions.append({
+                            'counseling_id': counseling_id,
+                            'day': day.strftime('%Y-%m-%d'),
+                            'time': day.strftime('%H:%M:%S')  # ⬅️ 시간도 따로 넘김
+                        })
+
+                if valid_sessions:
+                    client_histories.append({
+                        'client_id': client_id,
+                        'username': username,
+                        'valid_sessions': valid_sessions
+                    })
+
+            # 5. 결과 전송
+            emit('data_history_result', {
+                'status': 'success',
+                'clients': client_histories
+            })
+
+    except Exception as e:
+        emit('data_history_result', {
+            'status': 'error',
+            'message': str(e)
+        })
+    finally:
+        connection.close()
+
+
+
+
+@app.route('/conversation_data/<int:counseling_id>')
+def get_conversation_data(counseling_id):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = "SELECT start, label, mse, text FROM conversation_data WHERE counseling_id = %s ORDER BY start ASC"
+            cursor.execute(sql, (counseling_id,))
+            result = cursor.fetchall()
+            return jsonify(result)
+    finally:
+        connection.close()
 
 @socketio.on('start')
 def handle_start():
