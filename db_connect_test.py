@@ -213,6 +213,55 @@ def process_audio(audio_data, sent_time, session_id=None):
     return results
 
 
+from flask import Flask, jsonify
+import pymysql
+import datetime
+
+@app.route('/get_counseling_detail/<int:counseling_id>')
+def get_counseling_detail(counseling_id):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT start, label, text, emotion
+                FROM conversation_data
+                WHERE counseling_id = %s
+                ORDER BY start ASC
+            """
+            cursor.execute(sql, (counseling_id,))
+            results = cursor.fetchall()
+
+            formatted_results = []
+            for row in results:
+                # ❗ strftime() 쓰지 말고 그냥 문자열로 사용
+                start_time = row['start'] if row['start'] else "00:00:00"
+                formatted_results.append({
+                    'sentTime': start_time,
+                    'label': row['label'],
+                    'text': row['text'],
+                    'emotion': row['emotion']
+                })
+
+            print("formatted_results:", formatted_results, flush=True)  # 🔥 이제 확실히 찍힐거야
+
+            return jsonify({
+                'status': 'success',
+                'messages': formatted_results
+            })
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'messages': [],
+            'message': str(e)
+        })
+
+    finally:
+        connection.close()
+
+
+
+
 # WebSocket 처리 함수
 async def handle_connection(websocket, path):
     session_id = id(websocket)
@@ -619,7 +668,33 @@ def counsel_id(counsel_id):
     finally:
         connection.close()
 
+@app.route('/add_client', methods=['POST'])
+def add_client():
+    data = request.get_json()
+    username = data.get('username')
+    user_id = data.get('user_id')
+    phone = data.get('phone')
+    counselor_id = data.get('counselor_id')
+    gender = data.get('gender')  # ✅ 새로 받는다
 
+    if not (username and user_id and counselor_id and gender):
+        return jsonify({'status': 'error', 'message': '필수 데이터 누락'}), 400
+
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO clients (id, username, counsel_id, gender, phone)
+                VALUES (%s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (user_id, username, counselor_id, gender, phone))
+        connection.commit()
+        return jsonify({'status': 'success', 'message': '내담자 추가 완료'}), 200
+    except Exception as e:
+        print('DB 오류:', e)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+    finally:
+        connection.close()
 
 
 @app.route('/')
