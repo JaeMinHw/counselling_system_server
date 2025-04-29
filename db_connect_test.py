@@ -496,7 +496,9 @@ def data_history():
                 # 2. 내담자의 모든 상담 데이터 (counseling_data) 조회
                 sql = "SELECT counseling_id, day FROM counseling_data WHERE clients_id = %s"
                 cursor.execute(sql, (client_id,))
+                
                 counseling_list = cursor.fetchall()
+                print(client_id)
                 print("test") # 여기 실행 안 됨 <------------------------------------------------------------------------------------------------------------------------------------------------------------
                 valid_sessions = []
                 for row in counseling_list:
